@@ -19,3 +19,16 @@ The models.py contains the class definitions of important network architectures 
 
 # Some projects using this library:
 * [zeroc](https://github.com/snap-stanford/zeroc): Implementation for ["ZeroC: A Neuro-Symbolic Model for Zero-shot Concept Recognition and Acquisition at Inference Time"](https://arxiv.org/abs/2206.15049) (Wu et al., NeurIPS 2022)
+
+
+# Citation
+If you find our work and/or our code useful, please cite us via:
+
+```bibtex
+@inproceedings{wu2022zeroc,
+title={Zeroc: A neuro-symbolic model for zero-shot concept recognition and acquisition at inference time},
+author={Wu, Tailin and Tjandrasuwita, Megan and Wu, Zhengxuan and Yang, Xuelin and Liu, Kevin and Sosi{\v{c}}, Rok and Leskovec, Jure},
+booktitle={Neural Information Processing Systems},
+year={2022},
+}
+```
