@@ -3433,3 +3433,286 @@ class My_Tuple(tuple):
 
 class My_Freeze_Tuple(tuple):
     pass
+
+
+def plot_simple(
+    x=None,
+    y=None,
+    title=None,
+    xlabel=None,
+    ylabel=None,
+    ylim=None,
+    figsize=(7,5),
+):
+    plt.figure(figsize=figsize)
+    if x is None:
+        plt.plot(y)
+    else:
+        plt.plot(x, y)
+    if title is not None:
+        plt.title(title, fontsize=fontsize)
+    if xlabel is not None:
+        plt.xlabel(xlabel, fontsize=fontsize)
+    if ylabel is not None:
+        plt.ylabel(ylabel, fontsize=fontsize)
+    plt.tick_params(labelsize=fontsize)
+    if ylim is not None:
+        plt.ylim(ylim)
+    plt.show()
+
+
+def plot_2_axis(
+    x,
+    y1,
+    y2,
+    xlabel=None,
+    ylabel1=None,
+    ylabel2=None,
+    ylim1=None,
+    ylim2=None,
+    title=None,
+    figsize=(7,5),
+    fontsize=14,
+):
+    import matplotlib.pylab as plt
+    fig, ax1 = plt.subplots(figsize=figsize)
+
+    color = 'tab:blue'
+    if xlabel is not None:
+        ax1.set_xlabel(xlabel, fontsize=fontsize)
+    if ylabel1 is not None:
+        ax1.set_ylabel(ylabel1, color=color, fontsize=fontsize)
+    ax1.plot(x, y1, color=color)
+    ax1.tick_params(axis='y', labelcolor=color, labelsize=fontsize-1)
+    if ylim1 is not None:
+        ax1.set_ylim(ylim1)
+
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    color = 'tab:red'
+    if ylabel2 is not None:
+        ax2.set_ylabel(ylabel2, color=color, fontsize=fontsize)  # we already handled the x-label with ax1
+    ax2.plot(x, y2, color=color)
+    ax2.tick_params(axis='y', labelcolor=color, labelsize=fontsize-1)
+    if ylim2 is not None:
+        ax2.set_ylim(ylim2)
+
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    if title is not None:
+        plt.title(title, fontsize=fontsize)
+    plt.show()
+
+
+def groupby_add_keys(df, by, add_keys, other_keys=None, mode="mean"):
+    """
+    Group the df by the "by" argument, and also add the keys of "add_keys" (e.g. "hash", "filename") 
+        if there is only one instance corresponding to the row.
+
+    Args:
+        add_keys: list of keys to add at the rightmost, e.g. ["hash", "filename"]
+        other_keys: other keys to show. If None, will use all keys in df.
+        mode: how to aggregate the values if there are more than one instance for the groupby.
+
+    Returns:
+        df_group: the desired DataFrame.
+    """
+    import pandas as pd
+    def groupby_df(df, by, mode):
+        if mode == "mean":
+            df_group = df.groupby(by=by).mean()
+        elif mode == "median":
+            df_group = df.groupby(by=by).median()
+        elif mode == "max":
+            df_group = df.groupby(by=by).max()
+        elif mode == "min":
+            df_group = df.groupby(by=by).min()
+        elif mode == "var":
+            df_group = df.groupby(by=by).var()
+        elif mode == "std":
+            df_group = df.groupby(by=by).std()
+        elif mode == "count":
+            df_group = df.groupby(by=by).count()
+        else:
+            raise
+        return df_group
+    df = deepcopy(df)
+    if isinstance(mode, str):
+        df_group = groupby_df(df, by=by, mode=mode)
+    else:
+        assert isinstance(mode, dict)
+        df_list = []
+        for mode_ele, keys in mode.items():
+            if mode_ele != "count":
+                df_list.append(groupby_df(df[by + keys], by=by, mode=mode_ele))
+            else:
+                df["count"] = 1
+                df_list.append(groupby_df(df[by + ["count"]], by=by, mode=mode_ele))
+        df_group = pd.concat(df_list, axis=1)
+    if other_keys is None:
+        other_keys = list(df_group.keys())
+    if not isinstance(add_keys, list):
+        add_keys = [add_keys]
+    if not isinstance(other_keys, list):
+        other_keys = [other_keys]
+    if isinstance(mode, dict) and "count" in mode and "count" not in other_keys:
+        other_keys.append("count")
+    df_group[add_keys] = None
+    for i in range(len(df_group)):
+        for k, key in enumerate(reversed(add_keys)):
+            df_group_ele = df_group.iloc[i]
+            filter_dict = dict(zip(df_group.T.keys().names, df_group.T.keys()[i]))
+            df_filter = filter_df(df, filter_dict)
+            if len(df_filter) == 1:
+                df_group.iat[i, -(k+1)] = df_filter[key].values[0]
+    df_group = df_group[other_keys + add_keys]
+    return df_group
+
+
+def get_unique_keys_df(df, types="all", exclude=None, exclude_str=None):
+    """Get the unique keys in a pandas Dataframe."""
+    if exclude is None:
+        exclude = []
+    if not isinstance(exclude, list):
+        exclude = [exclude]
+    if types == "all":
+        keys_str = list(df.keys())
+    elif types == "str":
+        keys_str = [key for key, value in zip(df.keys(), df.iloc[0].values) if isinstance(value, str)]
+    elif types == "number":
+        keys_str = [key for key, value in zip(df.keys(), df.iloc[0].values) if isinstance(value, Number)]
+    keys_unique = []
+    for key in keys_str:
+        try:
+            if len(df[key].unique()) > 1 and key not in exclude:
+                is_exclude = False
+                if exclude_str is not None:
+                    for string in exclude_str:
+                        if string in key:
+                            is_exclude = True
+                            break
+                if is_exclude:
+                    continue
+                keys_unique.append(key)
+        except:
+            pass
+    return keys_unique
+
+
+def filter_df(df, filter_dict):
+    """Filter a pandas DataFrame according to a dictionary.
+
+    Args:
+        filter_dict, e.g. 
+        filter_dict = {
+            "dataset": "c-Line",
+            "lr": 0.0001,
+        }
+    """
+    mask = None
+    for key, item in filter_dict.items():
+        if mask is None:
+            mask = df[key] == item
+        else:
+            mask = mask & (df[key] == item)
+    return df[mask]
+
+
+def get_num_params(model, is_trainable = None):
+    """Get number of parameters of the model, specified by 'None': all parameters;
+    True: trainable parameters; False: non-trainable parameters.
+    """
+    num_params = 0
+    for param in list(model.parameters()):
+        nn=1
+        if is_trainable is None \
+            or (is_trainable is True and param.requires_grad is True) \
+            or (is_trainable is False and param.requires_grad is False):
+            for s in list(param.size()):
+                nn = nn * s
+            num_params += nn
+    return num_params
+
+
+def get_graph_edit_distance(g1, g2, to_undirected=False):
+    """Get the edit distance of two graphs considering their node and edge types.
+
+    Args:
+        g1, g2: has the format of 
+        [
+            [(0, 'Line', ...),
+             (2, 'Line', ...),
+             (3, 'Line', ...),
+             ((0, 2), 'VerticalEdge', ...),
+             ((0, 3), 'Parallel', ...),
+             ((2, 3), 'VerticalEdge', ...),
+        ]
+        to_undirected: if True, will first transform the nx graph into an undirected graph.
+
+    Returns:
+        edit_distance: the edit distance between the two graphs.
+    """
+    import networkx as nx
+    def node_match(node_dict1, node_dict2):
+        return node_dict1["type"] == node_dict2["type"]
+    def edge_match(edge_dict1, edge_dict2):
+        return edge_dict1["type"] == edge_dict2["type"]
+    def standardize_graph(graph):
+        new_graph = []
+        for ele in graph:
+            if isinstance(ele[0], list):
+                ele = (tuple(ele[0]), ele[1])
+            new_graph.append(ele)
+        return new_graph
+    if not isinstance(g1, nx.Graph):
+        g1 = get_nx_graph(standardize_graph(g1))
+    if not isinstance(g2, nx.Graph):
+        g2 = get_nx_graph(standardize_graph(g2))
+    if to_undirected:
+        g1 = g1.to_undirected(reciprocal=False)
+        g2 = g2.to_undirected(reciprocal=False)
+    edit_distance = nx.graph_edit_distance(g1, g2, node_match=node_match, edge_match=edge_match)
+    return edit_distance
+
+
+def draw_nx_graph(g):
+    import networkx as nx
+    import matplotlib.pylab as plt
+    pos = nx.spring_layout(g)
+    nx.draw(g, pos=pos, with_labels=True, edge_color="#E115DA")
+    nx.draw_networkx_edge_labels(
+        g,
+        pos,
+        edge_labels={(edge_src, edge_dst): item["type"] for edge_src, edge_dst, item in g.edges(data=True)} if "type" in list(g.edges(data=True))[0][2] else None,
+        font_color='red',
+    )
+    plt.show()
+
+
+def get_nx_graph(graph, isplot=False):
+    import networkx as nx
+    g = nx.DiGraph()
+    graph_dict = dict([ele[:2] for ele in graph])
+    for item in graph:
+        if isinstance(item[0], Number) or isinstance(item[0], str):
+            g.add_node("{}:{}".format(item[0], item[1]), type=item[1], E=item[2] if len(item) > 2 else None)
+        elif isinstance(item[0], tuple):
+            src, dst = item[0]
+            g.add_edge(
+                "{}:{}".format(src, graph_dict[src]),
+                "{}:{}".format(dst, graph_dict[dst]),
+                type=item[1],
+                E=item[2] if len(item) > 2 else None,
+            )
+    if isplot:
+        draw_nx_graph(g)
+    return g
+
+
+def get_triu_ids(array, is_triu=True):
+    if isinstance(array, Number):
+        array = np.arange(array)
+    rows_matrix, col_matrix = np.meshgrid(array, array)
+    matrix_cat = np.stack([rows_matrix, col_matrix], -1)
+    rr, cc = np.triu_indices(len(matrix_cat), k=1)
+    rows, cols = matrix_cat[cc, rr].T
+    return rows, cols
